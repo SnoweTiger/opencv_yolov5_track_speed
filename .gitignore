@@ -131,3 +131,6 @@ dmypy.json
 
 yolov5s6.pt
 output.*
+
+output_bowl.gif
+output_tennis.gif
