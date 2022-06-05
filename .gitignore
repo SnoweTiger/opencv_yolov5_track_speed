@@ -130,3 +130,4 @@ dmypy.json
 .pyre/
 
 yolov5s6.pt
+output.*

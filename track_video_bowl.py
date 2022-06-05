@@ -8,18 +8,18 @@ from func import calc_dist_and_drawbox # import our fuction
 # input video path
 path = "pexels-adnan-karimi-7887761.mp4"
 
-show_frames = False # True for show frames due processing
+# Camera data
+f = 25 # mm
+sensor_h = 24 # mm
+fps = 60
 
 # output
 output_path = 'output.avi' # empty for not save video
 # output_path = 'output.gif'
 output_slow_motion = True
-stop_frame = 80 # N frames for output, 0 for all fram es
+stop_frame = 70 # N frames for output, 0 for all fram es
 
-# Camera data
-f = 25 # mm
-sensor_h = 24 # mm
-fps = 60
+show_frames = False # True for show frames due processing
 
 # object data
 real_size = 217 # bowl ball diameter in mm
@@ -36,7 +36,7 @@ model = torch.hub.load('ultralytics/yolov5', 'yolov5s6', pretrained=True)
 
 #  load video
 cap = cv2.VideoCapture(path)
-# cap = cv2.VideoCapture("0001-0088.avi")
+
 
 
 # Get the Default resolutions
@@ -48,9 +48,9 @@ frame_height = int(cap.get(4))
 i = 1
 h = 0
 box_notfound_count = 0
-
 frames = []
 
+print(f'Start processing video {path}')
 # main cycle
 while True:
 
@@ -87,10 +87,11 @@ while True:
         cv2.putText(img, f'Speed:{speed:.2f}km/h', (x, y-30), font, 0.5, (255,255,255), 1)
     # i += 1
 
+    # add frame to our list
     frames.append(img)
 
+    # show frame
     if show_frames:
-        # show image
         img = cv2.resize(img, None, fx=0.5, fy=0.5)
         cv2.imshow("Image", img)
         key = cv2.waitKey(60)
@@ -98,18 +99,24 @@ while True:
     if i == stop_frame: break
     i += 1
 
+print(f'Finished processing. Made {len(frames)} frames')
 
-# Release everything if job is finished
+# Release capture
 cap.release()
 
+# change fps if we need slowmotion
 if output_slow_motion: fps = fps / 3
 
 if len(output_path.split('.')) == 2:
+
+    # write gif if output_path .gif
     if output_path.split('.')[1] == 'gif':
         with imageio.get_writer(output_path, mode="I", duration=1/fps) as gif_writer:
             for frame in frames:
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 gif_writer.append_data(frame)
+
+    # write avi in other cases
     else:
         out = cv2.VideoWriter(output_path,cv2.VideoWriter_fourcc('M','J','P','G'), fps, (frame_width,frame_height))
         for frame in frames:
@@ -118,4 +125,5 @@ if len(output_path.split('.')) == 2:
 
     print(f'Video write to {output_path} slow motion {output_slow_motion}')
 
+# Release everything if job is finished
 cv2.destroyAllWindows()
