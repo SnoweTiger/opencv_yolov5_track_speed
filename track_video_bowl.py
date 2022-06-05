@@ -1,80 +1,20 @@
 import cv2
 import numpy as np
-from math import sqrt
-# import imageio
 import torch
 import pandas as pd
+import imageio
+from func import calc_dist_and_drawbox # import our fuction
 
-# convert mm/s to km/h
-def mmps_to_kmph(speed):
-    return speed * 3600 / 10**6
+# input video path
+path = "pexels-adnan-karimi-7887761.mp4"
 
-# calculate distanse, speed and draw on image
-def calc_dist_and_drawbox(img, box, frame_n, fps, real_size,
-                        use_object_width = True, # use height for calc. dist.
-                        box_xywh = True,
-                        threshold = 5 # threshold in px
-                        ):
+show_frames = False # True for show frames due processing
 
-    global last_box, last_dist, distance, start_frame
-
-    step_speed = 0
-    dist_speed = 0
-
-    if not box_xywh:
-        x, y, x2, y2 = box
-        w = abs(x2-x)
-        h = abs(y2-y)
-    else:
-        x, y, w, h = box
-
-    x_last, y_last, w_last, h_last = last_box
-
-    # calc. distance and it changes
-    if use_object_width: dist = (f * real_size * width) / (w * sensor_h)
-    else: dist = (f * real_size * height) / (h * sensor_h)
-    delta_dist = dist - last_dist
-
-    if last_dist > 0:
-
-        # x/y movemens in px
-        delta_x = abs(x - x_last)
-        delta_y = abs(y - y_last)
-
-        # controll threshold
-        if delta_x < threshold: delta_x = 0
-        if delta_y < threshold: delta_y = 0
-        if abs(h-h_last) < threshold: delta_dist = 0
-
-        # convert x/y movemens in mm
-        delta_x = delta_x * real_size / w
-        delta_y = delta_y * real_size / h
-
-        step_path = sqrt(delta_dist**2 + delta_x**2 + delta_y**2)
-        if step_path < (0.3 * real_size): step_path = 0
-
-        distance += step_path
-        step_speed = step_path * fps
-
-        if (start_frame == 0) and (distance > 0):
-            start_frame = frame_n
-            dist_speed = step_speed
-        else:
-            dist_speed = distance * fps / (frame_n - start_frame)
-
-    last_box = box
-    last_dist = dist
-
-    return x, y, w, h, distance/10**3, mmps_to_kmph(dist_speed)
-
-
-
-cap = cv2.VideoCapture("pexels-adnan-karimi-7887761.mp4") # боулинг, теряется сильно
-# cap = cv2.VideoCapture("pexels-pavel-danilyuk-6217185.mp4") # волейбол. теряется сразу после удара и в дали
-# cap = cv2.VideoCapture("pexels-pavel-danilyuk-7334471.mp4") # боулинг. сильно теряется мячик
-# cap = cv2.VideoCapture("pexels-rodnae-productions-8224214.mp4") # мячик и ракетка в целом неплохо
-# cap = cv2.VideoCapture("pexels-tima-miroshnichenko-6077691.mp4")  # теряется мячик в полете
-
+# output
+output_path = 'output.avi' # empty for not save video
+# output_path = 'output.gif'
+output_slow_motion = True
+stop_frame = 80 # N frames for output, 0 for all fram es
 
 # Camera data
 f = 25 # mm
@@ -82,36 +22,45 @@ sensor_h = 24 # mm
 fps = 60
 
 # object data
-# class_id = 32 # sport ball class id
-real_size = 217 # disc diameter
+real_size = 217 # bowl ball diameter in mm
 target_label = 'sports ball'
 
+# font and color
 font = cv2.FONT_HERSHEY_SIMPLEX
 color1 = (255,255,255)
 color2 = (0,0,255)
 
-last_box = (0,0,0,0)
-last_dist = 0
-distance = 0
-start_frame = 0
 
+#  load pretrained model yolov5s
 model = torch.hub.load('ultralytics/yolov5', 'yolov5s6', pretrained=True)
+
+#  load video
+cap = cv2.VideoCapture(path)
+# cap = cv2.VideoCapture("0001-0088.avi")
+
+
+# Get the Default resolutions
+frame_width = int(cap.get(3))
+frame_height = int(cap.get(4))
+
+
 
 i = 1
 h = 0
 box_notfound_count = 0
 
+frames = []
 
 # main cycle
 while True:
 
     # get start_frame
     success, img = cap.read()
-    if not success: continue
 
-    # get frame size
-    height, width, channels = img.shape
+    # print(i, success)
 
+    # if (not success) and (i>100): break
+    if not success: break
 
     # pass image trought net and get bounding boxes
     results = model([img])
@@ -123,7 +72,10 @@ while True:
     if box.shape[0] > 0:
         box_notfound_count = 0
         box = box.iloc[0][0:4].apply(round).tolist()
-        x, y, w, h, dist, speed = calc_dist_and_drawbox(img, box, i, fps, real_size, use_object_width = True, box_xywh = False)
+        x, y, w, h, dist, speed = calc_dist_and_drawbox(img, box, i, fps,
+                                        real_size, f, sensor_h,
+                                        use_object_width = True,
+                                        box_xywh = False)
     else:
         box_notfound_count +=1
 
@@ -133,14 +85,37 @@ while True:
         cv2.rectangle(img, (x, y), (x+160, y-50), (0,0,255), -1)
         cv2.putText(img, f'Dist.:{dist:.2f}m', (x, y-10), font, 0.5, (255,255,255), 1)
         cv2.putText(img, f'Speed:{speed:.2f}km/h', (x, y-30), font, 0.5, (255,255,255), 1)
+    # i += 1
+
+    frames.append(img)
+
+    if show_frames:
+        # show image
+        img = cv2.resize(img, None, fx=0.5, fy=0.5)
+        cv2.imshow("Image", img)
+        key = cv2.waitKey(60)
+
+    if i == stop_frame: break
     i += 1
 
-    # show image
-    img = cv2.resize(img, None, fx=0.5, fy=0.5)
-    cv2.imshow("Image", img)
-    key = cv2.waitKey(90)
-    # key = cv2.waitKey(0)
 
+# Release everything if job is finished
+cap.release()
 
+if output_slow_motion: fps = fps / 3
+
+if len(output_path.split('.')) == 2:
+    if output_path.split('.')[1] == 'gif':
+        with imageio.get_writer(output_path, mode="I", duration=1/fps) as gif_writer:
+            for frame in frames:
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                gif_writer.append_data(frame)
+    else:
+        out = cv2.VideoWriter(output_path,cv2.VideoWriter_fourcc('M','J','P','G'), fps, (frame_width,frame_height))
+        for frame in frames:
+            out.write(frame)
+        out.release()
+
+    print(f'Video write to {output_path} slow motion {output_slow_motion}')
 
 cv2.destroyAllWindows()
