@@ -15,7 +15,8 @@ def calc_dist_and_drawbox(img, box, frame_n, fps, real_size,
                         sensor_h = 24, # camera sensor height mm
                         use_object_width = True, # use height for calc. dist.
                         box_xywh = True, # if false box x,y,x2,y2
-                        threshold = 5 # threshold in px
+                        threshold = 5, # threshold in px
+                        speed_calc = True
                         ):
 
     global last_box, last_dist, distance, start_frame
@@ -59,13 +60,14 @@ def calc_dist_and_drawbox(img, box, frame_n, fps, real_size,
         if step_path < (0.3 * real_size): step_path = 0
 
         distance += step_path
-        step_speed = step_path * fps
 
-        if (start_frame == 0) and (distance > 0):
-            start_frame = frame_n
-            dist_speed = step_speed
-        else:
-            dist_speed = distance * fps / (frame_n - start_frame)
+        if speed_calc:
+            step_speed = step_path * fps
+            if (start_frame == 0) and (distance > 0):
+                start_frame = frame_n
+                dist_speed = step_speed
+            else:
+                dist_speed = distance * fps / (frame_n - start_frame)
 
     last_box = box
     last_dist = dist
